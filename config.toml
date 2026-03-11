@@ -1,0 +1,36 @@
+# AutoEnv configuration
+# This file is FIXED — the agent should not modify it.
+
+[eval]
+# Models to evaluate against (weakest to strongest)
+# These should span a capability range for the sweet-spot metric
+models = [
+    "qwen/qwen3-30b-a3b-instruct-2507",
+    "qwen/qwen3-235b-a22b-instruct-2507",
+    "z-ai/glm-5",
+]
+
+# Fixed eval budget — same for every iteration so results are comparable
+num_examples = 10
+rollouts_per_example = 2
+
+[eval.vf]
+# Path to verifiers endpoints registry
+endpoints_path = "./verifiers/configs/endpoints.toml"
+# Provider for prime eval
+provider = "prime"
+# Max concurrent requests
+max_concurrent = 16
+
+[judge]
+# Model used for LLM-as-judge feedback
+model = "anthropic/claude-opus-4.6"
+# API base URL (Prime inference)
+base_url = "https://api.pinference.ai/api/v1"
+# Environment variable holding the API key
+api_key_var = "PRIME_API_KEY"
+# Number of rollouts to sample for judge review
+num_sample_rollouts = 10
+# Max characters of rollout content to include in judge prompt
+# (prevents token explosion on long multi-turn trajectories)
+max_rollout_chars = 50000

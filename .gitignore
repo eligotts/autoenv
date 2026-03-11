@@ -1,0 +1,19 @@
+# Feedback log (tracked per-run, not committed)
+feedback_log.jsonl
+
+# Eval outputs
+outputs/
+candidate/outputs/
+.eval_*.log
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.venv/
+.env
