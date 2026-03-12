@@ -187,8 +187,8 @@ def fault_connection_pool(world: World, rng: random.Random):
     svc = world.services[svc_name]
 
     # Bad state
-    pool_max = svc.config.get("max_connections", (50,))
-    if isinstance(pool_max, tuple):
+    pool_max = svc.config.get("max_connections", 50)
+    if isinstance(pool_max, (tuple, list)):
         pool_max = pool_max[0]
     svc.connections_active = pool_max
     svc.connections_max = pool_max

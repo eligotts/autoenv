@@ -41,7 +41,7 @@ class OnCallEngineerEnv(vf.StatefulToolEnv):
         # doesn't see the state parameter in tool schemas.
         super().__init__(
             tools=[],  # We'll add tools after super().__init__
-            max_turns=20,  # ~20 tool calls before forced stop
+            max_turns=30,  # enough for medium/hard tasks requiring cross-service investigation
             **kwargs,
         )
 
@@ -105,21 +105,16 @@ class OnCallEngineerEnv(vf.StatefulToolEnv):
 
 
 def _reward_fn(completion: Any, state: vf.State, **kwargs) -> float:
-    """Compute reward from the world state after the episode."""
+    """Compute reward from the world state after the episode.
+
+    Uses the full multi-dimensional scoring regardless of whether resolve()
+    was called. Diagnosis requires resolve() (since it needs the stated root
+    cause), but remediation, communication, collateral, and escalation are
+    scored based on actions taken.
+    """
     world: World = state.get("world")
     if world is None:
         return 0.0
-
-    # If the agent never called resolve, give minimal credit
-    if not world.resolved:
-        # Check if they at least communicated or escalated
-        base = 0.0
-        if world.status_updates:
-            base += 0.05
-        if world.escalations and world.fault_requires_escalation:
-            base += 0.10
-        return base
-
     return compute_reward(world)
 
 

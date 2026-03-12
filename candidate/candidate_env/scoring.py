@@ -14,7 +14,12 @@ from candidate_env.world import World
 
 
 def compute_reward(world: World) -> float:
-    """Compute the overall 0-1 reward for a completed episode."""
+    """Compute the overall 0-1 reward for a completed episode.
+
+    Scores all components regardless of whether resolve() was called.
+    If resolve() wasn't called, diagnosis gets 0 but remediation, communication,
+    collateral, and escalation are still scored based on actions taken.
+    """
     diagnosis = score_diagnosis(world)
     remediation = score_remediation(world)
     efficiency = score_efficiency(world)
@@ -39,7 +44,10 @@ def score_diagnosis(world: World) -> float:
     Full credit: correct service AND correct mechanism
     60% credit: correct mechanism, wrong trigger
     40% credit: correct service, wrong mechanism
-    0%: completely wrong
+    0%: completely wrong or didn't call resolve()
+
+    If resolve() was not called, diagnosis scores 0 — this is the main
+    incentive to call resolve(). But other components still score.
     """
     if not world.resolved:
         return 0.0
@@ -73,11 +81,9 @@ def score_remediation(world: World) -> float:
     """Score whether the agent's actions fixed the issue.
 
     Looks at actions_taken and whether the correct remediation was applied.
-    Making things worse scores 0 and also penalizes collateral.
+    Scored regardless of whether resolve() was called — agents who fix the
+    issue but forget to call resolve still get remediation credit.
     """
-    if not world.resolved:
-        return 0.0
-
     correct_rem = world.fault_correct_remediation.lower()
     actions = world.actions_taken
 
@@ -91,7 +97,6 @@ def score_remediation(world: World) -> float:
     for action in actions:
         cmd = f"{action.get('command', '')}".lower()
         svc = action.get("service", "").lower()
-        action_str = f"{cmd} {svc}".strip()
 
         # Match against correct remediation
         if _remediation_matches(correct_rem, svc, cmd):

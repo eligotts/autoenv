@@ -38,6 +38,19 @@ def _tick(state: dict, tool_name: str):
     world.simulated_time_used += cost
 
 
+def _check_duplicate_call(state: dict, tool_name: str, **kwargs) -> str | None:
+    """Detect repeated identical tool calls and warn the agent."""
+    call_key = f"{tool_name}:{json.dumps(kwargs, sort_keys=True, default=str)}"
+    recent = state.get("_recent_calls", [])
+    if recent and recent[-1] == call_key:
+        return (f"Note: You just called {tool_name} with the same parameters. "
+                f"Results are unchanged. Consider a different approach or "
+                f"declare resolution with resolve().")
+    recent.append(call_key)
+    state["_recent_calls"] = recent[-5:]  # keep last 5
+    return None
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # OBSERVABILITY TOOLS
 # ═════════════════════════════════════════════════════════════════════════════
@@ -66,6 +79,8 @@ def query_logs(service: str, time_range: str = "30m", filter: str = "", state: d
         filter: Optional keyword or regex filter (e.g. 'error', 'timeout')
     """
     _tick(state, "query_logs")
+    dup = _check_duplicate_call(state, "query_logs", service=service,
+                                 time_range=time_range, filter=filter)
     world: World = state["world"]
     if service not in world.services and service not in world.logs:
         return f"Service '{service}' not found."
@@ -74,8 +89,13 @@ def query_logs(service: str, time_range: str = "30m", filter: str = "", state: d
         filter_lower = filter.lower()
         logs = [l for l in logs if filter_lower in l.lower()]
     if not logs:
-        return f"No logs matching filter for {service}."
-    return "\n".join(logs[-50:])
+        result = f"No logs matching filter for {service}."
+    else:
+        result = "\n".join(logs[-50:])
+    if dup:
+        result = dup + "\n\n" + result
+    elapsed = f"\n[Elapsed: {world.simulated_time_used:.0f}min / 60min budget]"
+    return result + elapsed
 
 
 def query_metrics(service: str, metric_name: str, time_range: str = "1h", state: dict = {}) -> str:
@@ -87,13 +107,16 @@ def query_metrics(service: str, metric_name: str, time_range: str = "1h", state:
         time_range: Time range (e.g. '5m', '30m', '1h')
     """
     _tick(state, "query_metrics")
+    dup = _check_duplicate_call(state, "query_metrics", service=service,
+                                 metric_name=metric_name, time_range=time_range)
     world: World = state["world"]
     if service not in world.services:
         return f"Service '{service}' not found."
     svc = world.services[service]
 
     # Generate a plausible time series ending at current value
-    rng = random.Random(hash(f"{service}:{metric_name}"))
+    # Use time_used as part of seed so metrics change after remediation actions
+    rng = random.Random(hash(f"{service}:{metric_name}:{int(world.simulated_time_used)}"))
     current = _get_metric_value(svc, metric_name)
     if current is None:
         return f"Unknown metric '{metric_name}' for {service}."
@@ -116,7 +139,11 @@ def query_metrics(service: str, metric_name: str, time_range: str = "1h", state:
     lines = []
     for i, (ts_label, val) in enumerate(series):
         lines.append(f"  {ts_label}: {val}")
-    return header + "\n".join(lines)
+    result = header + "\n".join(lines)
+    if dup:
+        result = dup + "\n\n" + result
+    elapsed = f"\n[Elapsed: {world.simulated_time_used:.0f}min / 60min budget]"
+    return result + elapsed
 
 
 def get_traces(trace_id: str, state: dict = {}) -> str:

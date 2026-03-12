@@ -246,7 +246,7 @@ def _generate_config(name: str, kind: str, rng: random.Random) -> dict:
         "retry_backoff_ms": rng.choice([100, 500, 1000]),
     }
     if kind == "service" or kind == "gateway":
-        base["max_connections"] = rng.choice([50, 100, 200]),
+        base["max_connections"] = rng.choice([50, 100, 200])
         base["rate_limit_rps"] = rng.choice([1000, 5000, 10000])
         base["circuit_breaker_enabled"] = rng.choice([True, True, False])
         base["circuit_breaker_threshold"] = 0.5
