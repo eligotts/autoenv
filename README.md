@@ -112,11 +112,10 @@ ls feedback/   # files named by commit hash
 
 ### Numeric signals
 
-The evaluation pipeline computes per-iteration metrics against the target training model:
+Each iteration evaluates against **two models**:
 
-- **Mean reward** — target range 0.2-0.7 for RL (enough signal to learn, room to improve)
-- **Reward variance** — std > 0.1 (model sees varied outcomes)
-- **Solve rate** — 10-80% (not all-or-nothing)
+- **Target model** (RL training candidate) — the model you intend to train. Aim for mean reward 0.2-0.7, healthy variance (std > 0.1), solve rate 10-80%.
+- **Strong model** (solvability check) — a highly capable model that validates tasks are actually solvable and scoring is fair. Should score >0.7. If it can't solve the tasks, they're too hard or broken.
 - **Keep/discard verdict** — soft signal comparing current metrics to the previous iteration
 
 ### Qualitative signals

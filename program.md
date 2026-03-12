@@ -93,8 +93,10 @@ LOOP FOREVER:
 The feedback pipeline evaluates your environment on multiple axes. There is no single score to optimize — instead, read the feedback holistically:
 
 ### Numeric Signals
-- **RL readiness**: The environment is evaluated against the target training model. For RL to work well, aim for mean reward 0.2-0.7 (enough signal to learn, room to improve), healthy reward variance (std > 0.1), and non-trivial solve rate (10-80%).
-- **Model stats**: Mean/median/std of rewards, solve rates, error rates. Look for patterns.
+The environment is evaluated against **two models** each iteration:
+
+- **Target model** (RL training candidate): This is the model you're building the environment to train. Aim for mean reward **0.2-0.7** — enough signal to learn from, room to improve. Healthy reward variance (std > 0.1) and non-trivial solve rate (10-80%).
+- **Strong model** (solvability check): A highly capable model used to verify your tasks are actually solvable and your scoring is fair. The strong model should score **high (>0.7)**. If it can't solve the tasks, they're too hard or the scoring is broken — fix that before worrying about target model calibration.
 - **Reward distribution**: Is there a spread of scores, or are they clustered at 0 and 1?
 
 ### Qualitative Signals
@@ -104,8 +106,8 @@ The feedback pipeline evaluates your environment on multiple axes. There is no s
 ### What to Prioritize
 1. **First, make it work.** Get a basic environment that loads, runs, and produces rollouts without errors.
 2. **Then, match the spec.** Implement the core task structure, tools, and constraints the spec describes.
-3. **Then, fix the scoring.** Make sure rewards are faithful — high scores should mean genuinely good behavior.
-4. **Then, calibrate difficulty.** Tune task generation so the target model's mean reward is in the 0.2-0.7 range.
+3. **Then, fix the scoring.** Make sure rewards are faithful — high scores should mean genuinely good behavior. The strong model should score >0.7; if it doesn't, your tasks or scoring need work.
+4. **Then, calibrate difficulty.** Tune task generation so the target model's mean reward is in the 0.2-0.7 range while the strong model stays >0.7.
 5. **Then, polish.** Edge cases, additional spec features, code quality, TUI visualizer, etc.
 
 ## Rules

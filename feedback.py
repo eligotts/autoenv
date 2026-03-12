@@ -6,6 +6,10 @@ This script is FIXED — the agent CANNOT modify it.
 Reads rollout outputs from prime eval, computes numeric statistics and
 RL readiness metrics, and appends a structured entry to the feedback log.
 
+Evaluates two models:
+  - Target model: the model we intend to train with RL (aim for 0.2-0.7 mean reward)
+  - Strong model: a capable model used to verify tasks are solvable (should score >0.7)
+
 Qualitative feedback is handled separately by a Claude Code judge instance
 launched from evaluate.sh.
 
@@ -20,6 +24,7 @@ Usage:
 
 import argparse
 import json
+import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -113,25 +118,24 @@ def compute_model_stats(rollouts: list[dict]) -> dict:
     }
 
 
-def compute_rl_readiness(all_model_stats: dict[str, dict]) -> dict:
-    """Assess whether the environment is ready for RL training.
+def compute_rl_readiness(target_stats: dict | None) -> dict:
+    """Assess whether the environment is ready for RL training based on target model.
 
-    For a single target model, the ideal starting point is:
+    For the target model, the ideal starting point is:
     - Mean reward ~0.2-0.7 (enough signal to learn, room to improve)
     - Reward spread (std > 0.1) so the model sees varied outcomes
     - Non-trivial solve rate (0.1-0.8) — not all-or-nothing
     - Low error rate
     """
-    stats = next(iter(all_model_stats.values()), None)
-    if not stats or stats["n_rollouts"] == 0:
+    if not target_stats or target_stats["n_rollouts"] == 0:
         return {
             "mean_reward": 0.0,
             "interpretation": "No rollouts available.",
         }
 
-    mean = stats["mean_reward"]
-    std = stats["std_reward"]
-    solve_rate = stats["solve_rate"]
+    mean = target_stats["mean_reward"]
+    std = target_stats["std_reward"]
+    solve_rate = target_stats["solve_rate"]
 
     issues = []
     if mean < 0.1:
@@ -163,6 +167,47 @@ def compute_rl_readiness(all_model_stats: dict[str, dict]) -> dict:
     }
 
 
+def compute_strong_model_assessment(strong_stats: dict | None) -> dict:
+    """Assess whether the strong model can solve the tasks.
+
+    The strong model should score high (>0.7). If it can't solve the tasks,
+    they're too hard or the scoring is broken.
+    """
+    if not strong_stats or strong_stats["n_rollouts"] == 0:
+        return {
+            "mean_reward": 0.0,
+            "interpretation": "No strong model rollouts available.",
+        }
+
+    mean = strong_stats["mean_reward"]
+    std = strong_stats["std_reward"]
+    solve_rate = strong_stats["solve_rate"]
+
+    issues = []
+    if mean < 0.3:
+        issues.append(f"Strong model mean reward very low ({mean:.2f}) — tasks may be too hard, poorly designed, or scoring may be broken. A strong model should be able to solve most tasks.")
+    elif mean < 0.5:
+        issues.append(f"Strong model mean reward low ({mean:.2f}) — many tasks are unsolvable even for a strong model. Review task generation and scoring.")
+    elif mean < 0.7:
+        issues.append(f"Strong model mean reward moderate ({mean:.2f}) — approaching acceptable but ideally should be >0.7. Some tasks may still be too hard or scoring too strict.")
+    else:
+        issues.append(f"Strong model mean reward good ({mean:.2f}) — tasks are solvable and scoring appears fair.")
+
+    if solve_rate < 0.5:
+        issues.append(f"Strong model solve rate low ({solve_rate:.0%}) — too many tasks are unsolvable.")
+    elif solve_rate < 0.7:
+        issues.append(f"Strong model solve rate moderate ({solve_rate:.0%}) — some tasks may need adjustment.")
+    else:
+        issues.append(f"Strong model solve rate healthy ({solve_rate:.0%}).")
+
+    return {
+        "mean_reward": round(mean, 3),
+        "std_reward": round(std, 3),
+        "solve_rate": round(solve_rate, 3),
+        "interpretation": " ".join(issues),
+    }
+
+
 def compute_verdict(current: dict, previous: dict | None) -> dict:
     """Compare current feedback against previous iteration to produce a keep/discard verdict.
 
@@ -182,27 +227,39 @@ def compute_verdict(current: dict, previous: dict | None) -> dict:
     cur_solve = cur_rl.get("solve_rate", 0)
     prev_solve = prev_rl.get("solve_rate", 0)
 
+    # Also check strong model
+    cur_strong = current.get("strong_model", {})
+    prev_strong = previous.get("strong_model", {})
+    cur_strong_mean = cur_strong.get("mean_reward", 0)
+    prev_strong_mean = prev_strong.get("mean_reward", 0)
+
     mean_improved = cur_mean > prev_mean + 0.01
     mean_regressed = cur_mean < prev_mean - 0.01
     solve_improved = cur_solve > prev_solve + 0.02
     solve_regressed = cur_solve < prev_solve - 0.02
+    strong_regressed = cur_strong_mean < prev_strong_mean - 0.05
 
     reasons = []
     if mean_improved:
-        reasons.append(f"mean_reward improved ({prev_mean:.3f} → {cur_mean:.3f})")
+        reasons.append(f"target mean_reward improved ({prev_mean:.3f} → {cur_mean:.3f})")
     elif mean_regressed:
-        reasons.append(f"mean_reward regressed ({prev_mean:.3f} → {cur_mean:.3f})")
+        reasons.append(f"target mean_reward regressed ({prev_mean:.3f} → {cur_mean:.3f})")
     else:
-        reasons.append(f"mean_reward roughly flat ({prev_mean:.3f} → {cur_mean:.3f})")
+        reasons.append(f"target mean_reward roughly flat ({prev_mean:.3f} → {cur_mean:.3f})")
 
     if solve_improved:
-        reasons.append(f"solve_rate improved ({prev_solve:.3f} → {cur_solve:.3f})")
+        reasons.append(f"target solve_rate improved ({prev_solve:.3f} → {cur_solve:.3f})")
     elif solve_regressed:
-        reasons.append(f"solve_rate regressed ({prev_solve:.3f} → {cur_solve:.3f})")
+        reasons.append(f"target solve_rate regressed ({prev_solve:.3f} → {cur_solve:.3f})")
+
+    if strong_regressed:
+        reasons.append(f"strong model regressed ({prev_strong_mean:.3f} → {cur_strong_mean:.3f})")
 
     if mean_regressed and solve_regressed:
         verdict = "discard"
     elif mean_regressed and not solve_improved:
+        verdict = "discard"
+    elif strong_regressed and not mean_improved:
         verdict = "discard"
     else:
         verdict = "keep"
@@ -225,6 +282,12 @@ def main():
     parser.add_argument("--eval-success", default="true", help="Whether evals succeeded")
     args = parser.parse_args()
 
+    # Read config to identify target and strong models
+    with open(args.config, "rb") as f:
+        config = tomllib.load(f)
+    target_model = config["eval"]["target_model"]
+    strong_model = config["eval"]["strong_model"]
+
     timestamp = datetime.now(timezone.utc).isoformat()
     outputs_dir = Path(args.outputs_dir)
 
@@ -240,6 +303,7 @@ def main():
             "error": "No rollout outputs found.",
             "stats": {},
             "rl_readiness": {},
+            "strong_model": {},
         }
     else:
         # Compute per-model stats
@@ -252,7 +316,17 @@ def main():
             stats["time_ms"] = metadata.get("time_ms")
             all_stats[model_name] = stats
 
-        rl_readiness = compute_rl_readiness(all_stats)
+        # Find target and strong model stats by matching model names
+        target_stats = None
+        strong_stats = None
+        for model_name, stats in all_stats.items():
+            if target_model in model_name or model_name in target_model:
+                target_stats = stats
+            if strong_model in model_name or model_name in strong_model:
+                strong_stats = stats
+
+        rl_readiness = compute_rl_readiness(target_stats)
+        strong_assessment = compute_strong_model_assessment(strong_stats)
 
         feedback = {
             "commit": args.commit,
@@ -261,6 +335,7 @@ def main():
             "eval_success": args.eval_success.lower() == "true",
             "stats": all_stats,
             "rl_readiness": rl_readiness,
+            "strong_model": strong_assessment,
         }
 
     # Read previous entry for verdict comparison

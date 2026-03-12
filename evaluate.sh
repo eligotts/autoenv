@@ -7,7 +7,7 @@
 # What it does:
 #   1. Activates the project venv, reinstalls candidate
 #   2. Runs a smoke test (1 task, 1 rollout, 1 model) to catch obvious bugs
-#   3. Runs prime eval against each model in the config
+#   3. Runs prime eval against both the target model and the strong model
 #   4. Computes numeric stats (feedback.py)
 #   5. Launches Claude Code as judge to analyze rollouts and write feedback
 #
@@ -64,7 +64,8 @@ $1
 }
 
 # Get all eval params from config (fixed, no options)
-MODELS=$(read_config "print(json.dumps(config['eval']['models']))")
+TARGET_MODEL=$(read_config "print(config['eval']['target_model'])")
+STRONG_MODEL=$(read_config "print(config['eval']['strong_model'])")
 NUM_EXAMPLES=$(read_config "print(config['eval']['num_examples'])")
 ROLLOUTS_PER=$(read_config "print(config['eval']['rollouts_per_example'])")
 # Resolve relative endpoints path against SCRIPT_DIR
@@ -72,17 +73,16 @@ ENDPOINTS_PATH_RAW=$(read_config "print(config['eval']['vf']['endpoints_path'])"
 ENDPOINTS_PATH="$(cd "$SCRIPT_DIR" && realpath "$ENDPOINTS_PATH_RAW")"
 PROVIDER=$(read_config "print(config['eval']['vf']['provider'])")
 MAX_CONCURRENT=$(read_config "print(config['eval']['vf']['max_concurrent'])")
-# First model for smoke test
-FIRST_MODEL=$(echo "$MODELS" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin)[0])")
 
 echo "============================================="
 echo "AutoEnv Evaluation"
 echo "============================================="
-echo "Venv:        $VENV_DIR"
-echo "Examples:    $NUM_EXAMPLES"
-echo "Rollouts:    $ROLLOUTS_PER per example"
-echo "Models:      $(echo "$MODELS" | "$PYTHON" -c "import sys,json; print(', '.join(json.load(sys.stdin)))")"
-echo "Description: ${DESCRIPTION:-<none>}"
+echo "Venv:         $VENV_DIR"
+echo "Examples:     $NUM_EXAMPLES"
+echo "Rollouts:     $ROLLOUTS_PER per example"
+echo "Target model: $TARGET_MODEL"
+echo "Strong model: $STRONG_MODEL"
+echo "Description:  ${DESCRIPTION:-<none>}"
 echo "============================================="
 
 # ---- Step 0: Clean stale outputs from any interrupted prior run ----
@@ -95,13 +95,13 @@ echo "[1/5] Installing candidate environment..."
 uv pip install -e "$CANDIDATE_DIR" --python "$PYTHON" --quiet 2>&1 | tail -1
 echo "      Done."
 
-# ---- Step 2: Smoke test (1 task, 1 rollout, 1 model) ----
+# ---- Step 2: Smoke test (1 task, 1 rollout, target model) ----
 echo ""
-echo "[2/5] Smoke test (1 task, 1 rollout, $FIRST_MODEL)..."
+echo "[2/5] Smoke test (1 task, 1 rollout, $TARGET_MODEL)..."
 
 SMOKE_SUCCESS=true
 if (cd "$SCRIPT_DIR" && prime eval "$ENV_ID" \
-    -m "$FIRST_MODEL" \
+    -m "$TARGET_MODEL" \
     -e "$ENDPOINTS_PATH" \
     -p "$PROVIDER" \
     -n 1 \
@@ -122,14 +122,13 @@ fi
 # Clean smoke test outputs
 rm -rf "$OUTPUTS_DIR"
 
-# ---- Step 3: Run prime eval for each model ----
+# ---- Step 3: Run prime eval for both models ----
 echo ""
 echo "[3/5] Running full evaluations..."
 
 EVAL_SUCCESS=true
-MODEL_LIST=$(echo "$MODELS" | "$PYTHON" -c "import sys,json; [print(m) for m in json.load(sys.stdin)]")
 
-while IFS= read -r MODEL; do
+for MODEL in "$TARGET_MODEL" "$STRONG_MODEL"; do
     echo ""
     echo "  Evaluating: $MODEL"
     echo "  Examples: $NUM_EXAMPLES, Rollouts/example: $ROLLOUTS_PER"
@@ -149,7 +148,7 @@ while IFS= read -r MODEL; do
         echo "  FAILED: $MODEL (exit code $?)"
         EVAL_SUCCESS=false
     fi
-done <<< "$MODEL_LIST"
+done
 
 # ---- Step 4: Compute numeric stats ----
 echo ""
@@ -193,14 +192,22 @@ else
 import sys, json
 entry = json.loads(sys.stdin.read())
 rl = entry.get('rl_readiness', {})
-stats = list(entry.get('stats', {}).values())
-s = stats[0] if stats else {}
-print(f'''Numeric stats for this iteration:
-- Mean reward: {rl.get(\"mean_reward\", \"?\")}, Std: {rl.get(\"std_reward\", \"?\")}
-- Solve rate: {rl.get(\"solve_rate\", \"?\")}
-- Reward distribution: {json.dumps(s.get(\"reward_distribution\", {}))}
-- RL readiness: {rl.get(\"interpretation\", \"?\")}
-- Verdict vs previous: {entry.get(\"verdict\", {}).get(\"verdict\", \"?\")}: {entry.get(\"verdict\", {}).get(\"reason\", \"?\")}''')
+strong = entry.get('strong_model', {})
+lines = []
+lines.append('Numeric stats for this iteration:')
+lines.append('')
+lines.append('TARGET MODEL (RL training candidate):')
+lines.append(f'- Mean reward: {rl.get(\"mean_reward\", \"?\")}, Std: {rl.get(\"std_reward\", \"?\")}')
+lines.append(f'- Solve rate: {rl.get(\"solve_rate\", \"?\")}')
+lines.append(f'- RL readiness: {rl.get(\"interpretation\", \"?\")}')
+lines.append('')
+lines.append('STRONG MODEL (solvability check):')
+lines.append(f'- Mean reward: {strong.get(\"mean_reward\", \"?\")}, Std: {strong.get(\"std_reward\", \"?\")}')
+lines.append(f'- Solve rate: {strong.get(\"solve_rate\", \"?\")}')
+lines.append(f'- Interpretation: {strong.get(\"interpretation\", \"?\")}')
+lines.append('')
+lines.append(f'- Verdict vs previous: {entry.get(\"verdict\", {}).get(\"verdict\", \"?\")}: {entry.get(\"verdict\", {}).get(\"reason\", \"?\")}')
+print('\n'.join(lines))
 ")
 
     JUDGE_PROMPT="You are a feedback judge for an RL training environment. Your job is to analyze rollouts from a recent evaluation and provide detailed qualitative feedback.
@@ -208,8 +215,8 @@ print(f'''Numeric stats for this iteration:
 ## Your Instructions
 
 1. Read the environment spec: $SPEC_FILE
-2. Read the rollout results files in $OUTPUTS_DIR/evals/ — there are results.jsonl files containing the actual rollouts. Each line is a JSON object with fields like 'completion' (the full message trajectory), 'reward', 'info' (task data), etc.
-3. ACTUALLY READ THE ROLLOUTS. Open the results.jsonl files and examine the completion field of multiple rollouts. Look at the tool calls, tool responses, agent reasoning, and final scores. Read at least 6-8 rollouts spanning low, medium, and high reward scores.
+2. Read the rollout results files in $OUTPUTS_DIR/evals/ — there are results.jsonl files containing the actual rollouts. Each line is a JSON object with fields like 'completion' (the full message trajectory), 'reward', 'info' (task data), etc. There are TWO sets of rollouts — one from the target model (RL training candidate) and one from the strong model (solvability check).
+3. ACTUALLY READ THE ROLLOUTS. Open the results.jsonl files and examine the completion field of multiple rollouts from BOTH models. Look at the tool calls, tool responses, agent reasoning, and final scores. Read at least 6-8 rollouts spanning low, medium, and high reward scores.
 4. Read the feedback log at $FEEDBACK_LOG to understand prior iterations.
 
 ## Context
@@ -232,9 +239,14 @@ $STATS_SUMMARY
 - Could a model achieve a high score WITHOUT doing what the spec intends?
 - Are zero scores deserved? Are high scores deserved?
 
-### RL Training Readiness
-- For RL to work well, the model needs mean reward in the 0.2-0.7 range.
+### RL Training Readiness (Target Model)
+- For RL to work well, the target model needs mean reward in the 0.2-0.7 range.
 - Is the environment too hard? Too easy? What specific changes would bring the mean reward into the ideal range?
+
+### Solvability (Strong Model)
+- The strong model should score HIGH (>0.7 mean reward). This validates that the tasks are actually solvable and the scoring is fair.
+- If the strong model scores low, the tasks may be too hard, poorly designed, or the scoring may be broken.
+- Compare strong model rollouts to target model rollouts: where does the strong model succeed that the target model fails? This reveals what the target model needs to learn.
 
 ## Output
 
