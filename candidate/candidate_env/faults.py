@@ -383,21 +383,11 @@ def fault_downstream_cascading(world: World, rng: random.Random):
         ds.version = bad_version
 
     _add_fault_logs(world, downstream, [
-        f"ERROR {downstream}: FATAL: unhandled exception during startup in {ds.version}",
-        f"ERROR {downstream}: NullPointerException at init() — introduced in latest deploy",
+        f"ERROR {downstream}: FATAL: unhandled exception during startup",
         f"ERROR {downstream}: Process exited with code 1",
         f"ERROR {downstream}: CrashLoopBackOff: restarting in 30s (5 restarts in 10min)",
+        f"WARN {downstream}: Last successful startup was before most recent deploy",
     ], minutes_ago=12)
-
-    # Add runbook hint for crash-looping services
-    world.runbooks[downstream] = (
-        f"# Runbook: {downstream}\n\n"
-        f"## CrashLoopBackOff\n"
-        f"1. Check if there was a recent deploy: `get_recent_deploys`\n"
-        f"2. If crash started after deploy, rollback: `run_command({downstream}, 'rollback')`\n"
-        f"3. Check logs for the exception: `query_logs({downstream}, '30m', filter='error')`\n"
-        f"4. If not deploy-related, check config changes and dependencies\n"
-    )
 
     _add_red_herring_alert(world, rng)
 
@@ -562,8 +552,10 @@ def fault_network_partition(world: World, rng: random.Random):
             f"ERROR {svc_name}: i/o timeout after 5s",
         ], minutes_ago=platform_deploy_ago - 3)
 
-    # Red herrings
+    # Extra red herrings for hard difficulty
     _add_red_herring_deploy(world, rng)
+    _add_red_herring_deploy(world, rng)
+    _add_red_herring_alert(world, rng)
     _add_red_herring_alert(world, rng)
 
     world.fault_type = "infrastructure"
