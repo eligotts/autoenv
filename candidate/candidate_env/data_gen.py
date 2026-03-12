@@ -24,11 +24,11 @@ def generate_episode(seed: int) -> dict:
     """
     rng = random.Random(seed)
 
-    # Decide difficulty — shifted harder to bring mean reward into 0.3-0.6 range
+    # Decide difficulty — 25/40/35 split balances coverage with challenge
     roll = rng.random()
-    if roll < 0.20:
+    if roll < 0.25:
         difficulty = "easy"
-    elif roll < 0.60:
+    elif roll < 0.65:
         difficulty = "medium"
     else:
         difficulty = "hard"

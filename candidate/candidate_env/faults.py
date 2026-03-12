@@ -288,6 +288,9 @@ def fault_cache_stampede(world: World, rng: random.Random):
     world.alerts.append(Alert("P2", db_name,
         f"{db_name}: cpu_usage > 80% (current: {db.cpu_percent:.0f}%)",
         _ago(world.now, rng.uniform(3, 10)), is_related=True))
+    world.alerts.append(Alert("P2", cache_name,
+        f"{cache_name}: cache_miss_rate > 80% (current: 98%)",
+        _ago(world.now, rng.uniform(4, 12)), is_related=True))
 
     # Add symptom service metrics that show an inflection point
     symptom.latency_p50 = rng.uniform(500, 1500)
