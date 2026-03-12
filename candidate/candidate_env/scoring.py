@@ -117,15 +117,16 @@ def score_remediation(world: World) -> float:
 
 
 def score_efficiency(world: World) -> float:
-    """Score based on simulated time used and number of tool calls.
+    """Score based on simulated time used and total tool calls.
 
-    Fast and correct = 1.0
-    Reasonable pace = 0.7-1.0
-    Slow but correct = 0.3-0.7
-    Very slow / shotgun debugging = 0.0-0.3
+    Penalizes both shotgun debugging (too many total calls) and
+    excessive remediation actions (too many run_command calls).
     """
     time_used = world.simulated_time_used
     n_actions = len(world.actions_taken)
+    # Count total tool calls from time usage (each call advances time)
+    # Approximate from time: most calls cost 0.5-2min
+    n_total_calls = int(time_used / 0.8)  # rough estimate
 
     # Time-based score (60 min budget)
     if time_used <= 10:
@@ -141,54 +142,83 @@ def score_efficiency(world: World) -> float:
     else:
         time_score = 0.0
 
-    # Penalize excessive remediation actions (shotgun debugging)
+    # Penalize excessive remediation actions
     if n_actions <= 2:
         action_penalty = 0.0
     elif n_actions <= 4:
         action_penalty = 0.1
-    elif n_actions <= 6:
-        action_penalty = 0.3
     else:
-        action_penalty = 0.5
+        action_penalty = 0.3
 
-    return max(0.0, time_score - action_penalty)
+    # Penalize excessive total tool calls (shotgun investigation)
+    if n_total_calls <= 12:
+        query_penalty = 0.0
+    elif n_total_calls <= 18:
+        query_penalty = 0.1
+    elif n_total_calls <= 25:
+        query_penalty = 0.2
+    else:
+        query_penalty = 0.4
+
+    return max(0.0, time_score - action_penalty - query_penalty)
 
 
 def score_communication(world: World) -> float:
     """Score status update quality.
 
-    Must post at least one update. Better updates get higher scores.
+    Requires at least one update. Multiple updates score higher (investigation
+    update + remediation update). Checks that mentioned actions were actually taken.
     """
     if not world.status_updates:
         return 0.0
 
+    n_updates = len(world.status_updates)
+
+    # Score individual updates
     best_score = 0.0
     for update in world.status_updates:
         update_lower = update.lower()
-        score = 0.3  # base credit for posting anything
+        score = 0.2  # base credit for posting anything
 
         # Mentions the affected service
         if world.fault_root_service.lower() in update_lower:
-            score += 0.2
+            score += 0.15
 
         # Mentions impact or what's happening
         impact_words = ["impact", "affect", "down", "degraded", "error", "failing",
-                        "customer", "user", "slow", "timeout"]
+                        "customer", "user", "slow", "timeout", "spike"]
         if any(w in update_lower for w in impact_words):
-            score += 0.2
+            score += 0.15
 
-        # Mentions current actions
-        action_words = ["investigating", "working", "rollback", "restart", "scale",
-                        "fix", "remediat", "mitigat", "escalat"]
-        if any(w in update_lower for w in action_words):
-            score += 0.2
+        # Mentions actions — but only credit if the action was actually taken
+        action_map = {
+            "rollback": any("rollback" in a.get("command", "") for a in world.actions_taken),
+            "restart": any("restart" in a.get("command", "") for a in world.actions_taken),
+            "scale": any("scale" in a.get("command", "") for a in world.actions_taken),
+            "escalat": len(world.escalations) > 0,
+            "flush": any("flush" in a.get("command", "") for a in world.actions_taken),
+        }
+        # Credit "investigating" always (it's always true during an incident)
+        if "investigating" in update_lower or "triag" in update_lower:
+            score += 0.15
+        else:
+            for action_word, was_taken in action_map.items():
+                if action_word in update_lower:
+                    if was_taken:
+                        score += 0.15
+                    # Don't credit claiming actions not taken
+                    break
 
-        # Mentions ETA or next steps
+        # Mentions next steps
         next_words = ["eta", "next", "will", "plan", "follow up", "monitor"]
         if any(w in update_lower for w in next_words):
             score += 0.1
 
         best_score = max(best_score, min(1.0, score))
+
+    # Bonus for multiple updates (investigation + remediation)
+    if n_updates >= 2:
+        best_score = min(1.0, best_score + 0.15)
 
     return best_score
 

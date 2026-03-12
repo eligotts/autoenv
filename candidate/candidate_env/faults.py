@@ -134,6 +134,9 @@ def fault_deploy_oom(world: World, rng: random.Random):
         f"ERROR {svc_name}: Request failed: service unavailable (OOM restart in progress)",
     ], minutes_ago=deploy_ago - 5)
 
+    # Add a red herring alert even on easy difficulty
+    _add_red_herring_alert(world, rng)
+
     world.fault_type = "deploy_regression"
     world.fault_root_service = svc_name
     world.fault_root_cause = (
@@ -168,6 +171,8 @@ def fault_config_typo(world: World, rng: random.Random):
         f"WARN {svc_name}: Retry 2/3 failed: timeout",
         f"ERROR {svc_name}: All retries exhausted, returning 503",
     ], minutes_ago=10)
+
+    _add_red_herring_alert(world, rng)
 
     world.fault_type = "config_error"
     world.fault_root_service = svc_name
@@ -352,11 +357,39 @@ def fault_downstream_cascading(world: World, rng: random.Random):
         f"{downstream}: health check failing (0 healthy replicas)",
         _ago(world.now, rng.uniform(8, 15)), is_related=True))
 
+    # Include deploy info and version hint in crash logs
+    bad_deploy = None
+    for d in world.deploys:
+        if d.service == downstream and d.is_cause:
+            bad_deploy = d
+    if not bad_deploy:
+        bad_version = f"v{rng.randint(1,5)}.{rng.randint(0,20)}.{rng.randint(0,10)}"
+        world.deploys.append(Deploy(
+            service=downstream, version=bad_version,
+            previous_version=ds.version,
+            timestamp=_ago(world.now, rng.uniform(15, 40)),
+            deployed_by="ci-pipeline",
+            changes="refactored initialization logic",
+            is_cause=True,
+        ))
+        ds.version = bad_version
+
     _add_fault_logs(world, downstream, [
-        f"ERROR {downstream}: FATAL: unhandled exception during startup",
+        f"ERROR {downstream}: FATAL: unhandled exception during startup in {ds.version}",
+        f"ERROR {downstream}: NullPointerException at init() — introduced in latest deploy",
         f"ERROR {downstream}: Process exited with code 1",
-        f"ERROR {downstream}: CrashLoopBackOff: restarting in 30s",
+        f"ERROR {downstream}: CrashLoopBackOff: restarting in 30s (5 restarts in 10min)",
     ], minutes_ago=12)
+
+    # Add runbook hint for crash-looping services
+    world.runbooks[downstream] = (
+        f"# Runbook: {downstream}\n\n"
+        f"## CrashLoopBackOff\n"
+        f"1. Check if there was a recent deploy: `get_recent_deploys`\n"
+        f"2. If crash started after deploy, rollback: `run_command({downstream}, 'rollback')`\n"
+        f"3. Check logs for the exception: `query_logs({downstream}, '30m', filter='error')`\n"
+        f"4. If not deploy-related, check config changes and dependencies\n"
+    )
 
     _add_red_herring_alert(world, rng)
 
