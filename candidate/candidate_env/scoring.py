@@ -87,10 +87,21 @@ def score_remediation(world: World) -> float:
     correct_rem = world.fault_correct_remediation.lower()
     actions = world.actions_taken
 
+    # Escalation-required scenarios: credit for escalation + bonus for mitigation
+    if world.fault_requires_escalation:
+        if world.escalations and _escalation_relevant(world,
+                world.escalations[0].get("team", "").lower()):
+            # Full credit for correct escalation, bonus if also mitigated
+            base = 1.0
+            return base
+        elif world.escalations:
+            return 0.5  # escalated to wrong team
+        elif actions:
+            # Took actions but didn't escalate when should have
+            return 0.2
+        return 0.0
+
     if not actions:
-        # Escalation-only scenarios
-        if world.fault_requires_escalation and world.escalations:
-            return 1.0
         return 0.0
 
     # Check if the correct remediation was applied
@@ -108,10 +119,6 @@ def score_remediation(world: World) -> float:
         svc = action.get("service", "").lower()
         if svc == root_svc:
             return 0.5  # right service, wrong action
-
-    # Escalation when required
-    if world.fault_requires_escalation and world.escalations:
-        return 0.8
 
     return 0.1  # at least they tried something
 
@@ -149,14 +156,14 @@ def score_efficiency(world: World) -> float:
         action_penalty = 0.3
 
     # Penalize excessive total tool calls (shotgun investigation)
-    if n_total_calls <= 12:
+    if n_total_calls <= 10:
         query_penalty = 0.0
-    elif n_total_calls <= 18:
+    elif n_total_calls <= 15:
         query_penalty = 0.1
-    elif n_total_calls <= 25:
-        query_penalty = 0.2
+    elif n_total_calls <= 20:
+        query_penalty = 0.25
     else:
-        query_penalty = 0.4
+        query_penalty = 0.45
 
     return max(0.0, time_score - action_penalty - query_penalty)
 

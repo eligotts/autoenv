@@ -282,7 +282,11 @@ def run_command(service: str, command: str, state: dict = {}) -> str:
     _tick(state, "run_command")
     world: World = state["world"]
     if service not in world.services:
-        return f"Service '{service}' not found."
+        if "platform" in service.lower() or "network" in service.lower():
+            return (f"Service '{service}' is not a managed service in your domain. "
+                    f"You cannot directly operate on infrastructure services. "
+                    f"Consider escalating to the responsible team using page_engineer().")
+        return f"Service '{service}' not found. Check get_service_topology() for available services."
 
     svc = world.services[service]
     parts = command.strip().split()

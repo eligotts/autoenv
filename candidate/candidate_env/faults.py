@@ -165,8 +165,8 @@ def fault_config_typo(world: World, rng: random.Random):
         _ago(world.now, rng.uniform(5, 20)), is_related=True))
 
     _add_fault_logs(world, svc_name, [
-        f"ERROR {svc_name}: Request timeout after {svc.config['timeout_ms']}ms to downstream",
-        f"ERROR {svc_name}: TimeoutException: connection timed out (configured: {svc.config['timeout_ms']}ms)",
+        f"ERROR {svc_name}: Request timeout to downstream service",
+        f"ERROR {svc_name}: TimeoutException: upstream call exceeded configured limit",
         f"WARN {svc_name}: Retry 1/3 failed: timeout",
         f"WARN {svc_name}: Retry 2/3 failed: timeout",
         f"ERROR {svc_name}: All retries exhausted, returning 503",
@@ -713,10 +713,10 @@ def fault_feature_flag_interaction(world: World, rng: random.Random):
     ]
 
     _add_fault_logs(world, svc_name, [
-        f"WARN {svc_name}: Pricing calculation mismatch: engine=45.99, legacy_compat=39.99",
-        f"WARN {svc_name}: Discount applied twice: new_pricing_engine AND legacy_discount_compat both active",
-        f"INFO {svc_name}: Feature flags: new_pricing_engine=true, legacy_discount_compat=true",
+        f"WARN {svc_name}: Pricing calculation mismatch: expected 45.99, got 39.99 for order #8821",
+        f"WARN {svc_name}: Discount amount inconsistency detected in checkout flow",
         f"ERROR {svc_name}: Consistency check failed: order total does not match line items",
+        f"INFO {svc_name}: Active feature flags: {list(svc.config['feature_flags'].keys())}",
     ], minutes_ago=40)
 
     _add_red_herring_deploy(world, rng)
