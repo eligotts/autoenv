@@ -32,10 +32,14 @@ TOOL_COSTS = {
 
 
 def _tick(state: dict, tool_name: str):
-    """Advance simulated time for a tool call."""
+    """Advance simulated time for a tool call and track call count."""
     world: World = state["world"]
     cost = TOOL_COSTS.get(tool_name, 1.0)
     world.simulated_time_used += cost
+    # Track total tool call count for efficiency scoring
+    if not hasattr(world, "total_tool_calls"):
+        world.total_tool_calls = 0
+    world.total_tool_calls += 1
 
 
 def _check_duplicate_call(state: dict, tool_name: str, **kwargs) -> str | None:
@@ -541,14 +545,22 @@ def _generate_metric_series(current: float, n_points: int, rng: random.Random,
                             world: World, svc, metric_name: str) -> list[tuple[str, str]]:
     """Generate a time series ending at `current` with an inflection point."""
     # Determine baseline (normal value)
-    is_fault_svc = svc.name == world.fault_root_service
+    # Show inflection for ANY service with elevated metrics (not just root cause)
+    is_elevated = (
+        (metric_name == "error_rate" and current > 0.03) or
+        (metric_name == "latency_p99" and current > 500) or
+        (metric_name == "cpu_usage" and current > 70) or
+        (metric_name == "memory_usage" and current > 80) or
+        (metric_name == "queue_depth" and current > 1000) or
+        (metric_name == "connections_active" and current > svc.connections_max * 0.8)
+    )
     baseline_multiplier = {
         "latency_p99": 0.1, "error_rate": 0.01, "cpu_usage": 0.4,
         "memory_usage": 0.5, "request_count": 0.8, "queue_depth": 0.01,
         "connections_active": 0.2,
     }.get(metric_name, 0.5)
 
-    if is_fault_svc and current > 0:
+    if is_elevated and current > 0:
         baseline = max(current * baseline_multiplier, 0.001)
     else:
         baseline = current * rng.uniform(0.85, 1.15)

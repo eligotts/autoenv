@@ -289,10 +289,15 @@ def fault_cache_stampede(world: World, rng: random.Random):
         f"{db_name}: cpu_usage > 80% (current: {db.cpu_percent:.0f}%)",
         _ago(world.now, rng.uniform(3, 10)), is_related=True))
 
+    # Add symptom service metrics that show an inflection point
+    symptom.latency_p50 = rng.uniform(500, 1500)
+
     _add_fault_logs(world, symptom_svc, [
         f"WARN {symptom_svc}: Slow query to {db_name}: 2300ms",
         f"WARN {symptom_svc}: Cache miss for key user:profile:*, falling through to DB",
+        f"WARN {symptom_svc}: High cache miss rate detected — {cache_name} returning misses for 98% of requests",
         f"ERROR {symptom_svc}: Request timeout waiting for database response",
+        f"WARN {symptom_svc}: {cache_name} TTL appears very low — keys expiring almost immediately",
     ], minutes_ago=8)
 
     _add_fault_logs(world, cache_name, [

@@ -124,9 +124,7 @@ def score_efficiency(world: World) -> float:
     """
     time_used = world.simulated_time_used
     n_actions = len(world.actions_taken)
-    # Count total tool calls from time usage (each call advances time)
-    # Approximate from time: most calls cost 0.5-2min
-    n_total_calls = int(time_used / 0.8)  # rough estimate
+    n_total_calls = getattr(world, "total_tool_calls", 0)
 
     # Time-based score (60 min budget)
     if time_used <= 10:
@@ -184,11 +182,16 @@ def score_communication(world: World) -> float:
         if world.fault_root_service.lower() in update_lower:
             score += 0.15
 
-        # Mentions impact or what's happening
+        # Mentions impact with specificity — must mention a concrete service name
         impact_words = ["impact", "affect", "down", "degraded", "error", "failing",
                         "customer", "user", "slow", "timeout", "spike"]
-        if any(w in update_lower for w in impact_words):
+        mentions_specific_service = any(
+            svc.lower() in update_lower for svc in world.services
+        )
+        if any(w in update_lower for w in impact_words) and mentions_specific_service:
             score += 0.15
+        elif any(w in update_lower for w in impact_words):
+            score += 0.05  # generic impact statement, less credit
 
         # Mentions actions — but only credit if the action was actually taken
         action_map = {

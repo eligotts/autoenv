@@ -24,11 +24,11 @@ def generate_episode(seed: int) -> dict:
     """
     rng = random.Random(seed)
 
-    # Decide difficulty — weighted toward medium for best RL signal
+    # Decide difficulty — spec says 30/45/25
     roll = rng.random()
-    if roll < 0.20:
+    if roll < 0.30:
         difficulty = "easy"
-    elif roll < 0.70:
+    elif roll < 0.75:
         difficulty = "medium"
     else:
         difficulty = "hard"

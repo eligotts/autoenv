@@ -135,6 +135,7 @@ class World:
     fault_correct_remediation: str = ""
 
     # Tracking
+    total_tool_calls: int = 0
     simulated_time_used: float = 0.0
     actions_taken: list[dict] = field(default_factory=list)
     status_updates: list[str] = field(default_factory=list)
