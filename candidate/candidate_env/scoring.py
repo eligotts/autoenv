@@ -46,10 +46,20 @@ def score_diagnosis(world: World) -> float:
     40% credit: correct service, wrong mechanism
     0%: completely wrong or didn't call resolve()
 
-    If resolve() was not called, diagnosis scores 0 — this is the main
-    incentive to call resolve(). But other components still score.
+    If resolve() was not called, diagnosis scores 0 unless the agent correctly
+    escalated for escalation-required faults (partial credit 0.5).
     """
     if not world.resolved:
+        # Partial diagnosis credit for correct escalation without resolve
+        if (world.fault_requires_escalation and world.escalations
+                and any(_escalation_relevant(world, e.get("team", "").lower())
+                        for e in world.escalations)):
+            return 0.5
+        # Partial credit if agent mentioned root service in status updates
+        if world.status_updates:
+            for update in world.status_updates:
+                if world.fault_root_service.lower() in update.lower():
+                    return 0.2
         return 0.0
 
     stated = world.resolution_root_cause.lower()
