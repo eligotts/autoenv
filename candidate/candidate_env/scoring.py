@@ -2,8 +2,8 @@
 Scoring / reward computation for the on-call engineer environment.
 
 Multi-dimensional scoring:
-  - Correct diagnosis (0.35)
-  - Effective remediation (0.25)
+  - Correct diagnosis (0.30) — requires resolve()
+  - Effective remediation (0.30) — scored even without resolve()
   - Efficiency (0.15)
   - Communication (0.10)
   - No collateral damage (0.10)
@@ -28,8 +28,8 @@ def compute_reward(world: World) -> float:
     escalation = score_escalation(world)
 
     reward = (
-        0.35 * diagnosis +
-        0.25 * remediation +
+        0.30 * diagnosis +
+        0.30 * remediation +
         0.15 * efficiency +
         0.10 * communication +
         0.10 * collateral +

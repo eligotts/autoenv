@@ -439,12 +439,22 @@ def fault_stale_cache(world: World, rng: random.Random):
         f"ERROR {cache_name}: INVALIDATE command failed: connection reset by peer",
         f"WARN {cache_name}: Batch invalidation incomplete: 0/1500 keys invalidated",
         f"INFO {cache_name}: Cache serving stale entries (last successful invalidation: 3h ago)",
+        f"WARN {cache_name}: Data freshness check failed: cache entries older than expected TTL",
     ], minutes_ago=30)
 
     _add_fault_logs(world, svc_name, [
         f"INFO {svc_name}: Serving cached response for /api/prices (cache hit)",
         f"INFO {svc_name}: Request processed in 5ms (cached)",
+        f"WARN {svc_name}: Customer complaint correlation: stale data reports match {cache_name} serving pattern",
     ], minutes_ago=5)
+
+    # Add postgres logs showing normal load (red herring — DB is fine)
+    db_name = "postgres-primary"
+    if db_name in world.services:
+        _add_fault_logs(world, db_name, [
+            f"INFO {db_name}: Query performance normal, no anomalies detected",
+            f"INFO {db_name}: Replication lag: 0ms (healthy)",
+        ], minutes_ago=5)
 
     _add_red_herring_alert(world, rng)
 
