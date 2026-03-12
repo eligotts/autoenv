@@ -255,7 +255,7 @@ def fault_expired_certificate(world: World, rng: random.Random):
 # MEDIUM FAULTS
 # ═════════════════════════════════════════════════════════════════════════════
 
-@register_fault("dependency_failure", "medium")
+@register_fault("dependency_failure", "hard")
 def fault_cache_stampede(world: World, rng: random.Random):
     """Cache TTL set too low causes a cache stampede, overloading the database."""
     cache_name = "redis-cache"

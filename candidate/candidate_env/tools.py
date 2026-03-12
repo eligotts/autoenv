@@ -159,46 +159,83 @@ def get_traces(trace_id: str, state: dict = {}) -> str:
     _tick(state, "get_traces")
     world: World = state["world"]
 
-    # Generate a synthetic trace based on the fault
+    # Generate a synthetic trace that reflects the actual fault propagation
     root_svc = world.fault_root_service
     if not root_svc or root_svc not in world.services:
         return "No traces found for the given trace ID."
 
-    # Build a trace through the dependency chain
+    # Build traces through multiple dependency paths to show the fault propagation
     spans = []
     span_id = 1
 
-    # Find a path from gateway to fault service
+    # Find the alert service (symptom) and trace from gateway through it
+    alert_services = [a.service for a in world.alerts if a.is_related]
     gateway = "api-gateway" if "api-gateway" in world.services else list(world.services.keys())[0]
-    path = _find_dependency_path(world, gateway, root_svc)
+
+    # Build primary path: gateway -> alert service -> ... -> root cause
+    primary_target = alert_services[0] if alert_services else root_svc
+    path = _find_dependency_path(world, gateway, primary_target)
     if not path:
-        path = [gateway, root_svc]
+        path = [gateway, primary_target]
+
+    # Extend path to root cause if not already included
+    if root_svc not in path:
+        extension = _find_dependency_path(world, primary_target, root_svc)
+        if extension and len(extension) > 1:
+            path.extend(extension[1:])
 
     for i, svc_name in enumerate(path):
         svc = world.services.get(svc_name)
         if not svc:
             continue
-        latency = svc.latency_p99 if svc.error_rate > 0.05 else svc.latency_p50
-        error = svc.error_rate > 0.10
+        latency = svc.latency_p99 if svc.error_rate > 0.03 else svc.latency_p50
+        error = svc.error_rate > 0.05
+        # Show what the span is doing
+        if svc_name == root_svc:
+            operation = "handle_request"
+            if "cache" in svc_name:
+                operation = "cache_lookup"
+            elif "postgres" in svc_name:
+                operation = "query"
+        elif any(dst == svc_name for _, dst, _ in world.dependencies if _ == "async"):
+            operation = "process_message"
+        else:
+            operation = "handle_request"
+
+        error_msg = None
+        if error:
+            if svc.error_rate > 0.5:
+                error_msg = f"service unavailable (error_rate={svc.error_rate*100:.0f}%)"
+            elif svc.latency_p99 > 2000:
+                error_msg = f"upstream timeout ({svc.latency_p99:.0f}ms > threshold)"
+            else:
+                error_msg = f"elevated error rate ({svc.error_rate*100:.1f}%)"
+
         spans.append({
             "span_id": f"span-{span_id}",
             "parent_id": f"span-{span_id-1}" if span_id > 1 else None,
             "service": svc_name,
-            "operation": f"handle_request",
+            "operation": operation,
             "duration_ms": round(latency, 1),
-            "status": "ERROR" if error else "OK",
-            "error_message": f"upstream error from {svc_name}" if error else None,
+            "status": "ERROR" if error else "OK" if latency < 200 else "SLOW",
+            "error_message": error_msg,
         })
         span_id += 1
 
     header = f"Trace {trace_id}:\n"
     lines = []
     for s in spans:
-        indent = "  " * (int(s["span_id"].split("-")[1]) - 1)
-        status = f" ERROR: {s['error_message']}" if s["status"] == "ERROR" else ""
+        depth = int(s["span_id"].split("-")[1]) - 1
+        indent = "  " * depth
+        status_str = s["status"]
+        if s["error_message"]:
+            status_str += f": {s['error_message']}"
         lines.append(f"{indent}[{s['span_id']}] {s['service']}.{s['operation']} "
-                     f"({s['duration_ms']}ms) {s['status']}{status}")
-    return header + "\n".join(lines)
+                     f"({s['duration_ms']}ms) {status_str}")
+
+    result = header + "\n".join(lines)
+    elapsed = f"\n[Elapsed: {world.simulated_time_used:.0f}min / 60min budget]"
+    return result + elapsed
 
 
 def get_service_topology(state: dict = {}) -> str:

@@ -133,17 +133,12 @@ def score_efficiency(world: World) -> float:
     n_actions = len(world.actions_taken)
     n_total_calls = getattr(world, "total_tool_calls", 0)
 
-    # Time-based score (60 min budget)
-    if time_used <= 10:
+    # Time-based score (60 min budget) — smooth curve
+    if time_used <= 5:
         time_score = 1.0
-    elif time_used <= 20:
-        time_score = 0.8
-    elif time_used <= 30:
-        time_score = 0.6
-    elif time_used <= 40:
-        time_score = 0.3
-    elif time_used <= 50:
-        time_score = 0.1
+    elif time_used <= 60:
+        # Linear decay from 1.0 at 5min to 0.0 at 60min
+        time_score = max(0.0, 1.0 - (time_used - 5) / 55)
     else:
         time_score = 0.0
 

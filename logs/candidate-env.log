@@ -200,3 +200,40 @@
 2026-03-12 01:50:03 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 2, Event loop lag: mean=2ms, p99=2ms, max=2ms (n=98)
 2026-03-12 01:50:13 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=24ms, max=24ms (n=98)
 2026-03-12 01:50:17 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Environment server shut down
+2026-03-12 01:55:27 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Initializing ZMQEnvServer to serve candidate-env (env_args={}, extra_env_kwargs={})
+2026-03-12 01:55:27 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Loading environment candidate-env with env_args={}
+2026-03-12 01:55:27 - verifiers.utils.env_utils - INFO - Loading environment: candidate-env
+2026-03-12 01:55:27 - verifiers.utils.env_utils - INFO - Using default args: num_tasks=50, eval_num_tasks=20
+2026-03-12 01:55:27 - verifiers.utils.env_utils - INFO - Successfully loaded environment 'candidate-env'
+2026-03-12 01:55:27 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - ZMQEnvServer started on tcp://127.0.0.1:50632
+2026-03-12 01:55:27 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Health check responder started on tcp://127.0.0.1:50633
+2026-03-12 01:55:37 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=26ms, max=26ms (n=97)
+2026-03-12 01:55:47 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=3ms, max=3ms (n=99)
+2026-03-12 01:55:57 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=3ms, max=3ms (n=98)
+2026-03-12 01:56:07 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=2ms, max=2ms (n=98)
+2026-03-12 01:56:17 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=2ms, max=2ms (n=99)
+2026-03-12 01:56:27 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=4ms, max=4ms (n=98)
+2026-03-12 01:56:37 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=2ms, max=2ms (n=98)
+2026-03-12 01:56:47 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=11ms, max=11ms (n=98)
+2026-03-12 01:56:54 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Environment server shut down
+2026-03-12 01:57:02 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Initializing ZMQEnvServer to serve candidate-env (env_args={}, extra_env_kwargs={})
+2026-03-12 01:57:02 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Loading environment candidate-env with env_args={}
+2026-03-12 01:57:02 - verifiers.utils.env_utils - INFO - Loading environment: candidate-env
+2026-03-12 01:57:02 - verifiers.utils.env_utils - INFO - Using default args: num_tasks=50, eval_num_tasks=20
+2026-03-12 01:57:02 - verifiers.utils.env_utils - INFO - Successfully loaded environment 'candidate-env'
+2026-03-12 01:57:02 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - ZMQEnvServer started on tcp://127.0.0.1:51379
+2026-03-12 01:57:02 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Health check responder started on tcp://127.0.0.1:51380
+2026-03-12 01:57:12 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 8, Event loop lag: mean=2ms, p99=72ms, max=72ms (n=97)
+2026-03-12 01:57:22 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 8, Event loop lag: mean=2ms, p99=5ms, max=5ms (n=98)
+2026-03-12 01:57:32 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 8, Event loop lag: mean=2ms, p99=9ms, max=9ms (n=98)
+2026-03-12 01:57:42 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 8, Event loop lag: mean=2ms, p99=23ms, max=23ms (n=98)
+2026-03-12 01:57:52 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 8, Event loop lag: mean=2ms, p99=14ms, max=14ms (n=98)
+2026-03-12 01:58:02 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 8, Event loop lag: mean=2ms, p99=31ms, max=31ms (n=98)
+2026-03-12 01:58:12 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 7, Event loop lag: mean=2ms, p99=14ms, max=14ms (n=98)
+2026-03-12 01:58:22 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 7, Event loop lag: mean=2ms, p99=20ms, max=20ms (n=97)
+2026-03-12 01:58:32 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 5, Event loop lag: mean=2ms, p99=49ms, max=49ms (n=98)
+2026-03-12 01:58:42 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 3, Event loop lag: mean=2ms, p99=10ms, max=10ms (n=98)
+2026-03-12 01:58:52 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 2, Event loop lag: mean=2ms, p99=12ms, max=12ms (n=99)
+2026-03-12 01:59:02 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=17ms, max=17ms (n=98)
+2026-03-12 01:59:12 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Pending tasks: 1, Event loop lag: mean=2ms, p99=7ms, max=7ms (n=98)
+2026-03-12 01:59:19 - verifiers.workers.server.env_server.ZMQEnvServer - INFO - Environment server shut down
