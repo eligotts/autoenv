@@ -50,7 +50,7 @@ Your environment lives in `candidate/`. The only hard contract:
 ## The Experiment Loop
 
 ```
-LOOP:
+LOOP FOREVER:
   1. Read spec.md thoroughly
   2. Read feedback_log.jsonl (if it exists) — understand what's been tried and what the feedback says
   3. Decide what to implement or improve
@@ -112,10 +112,11 @@ The feedback pipeline evaluates your environment on multiple axes. There is no s
 ## Rules
 
 - **DO NOT modify** `evaluate.sh`, `feedback.py`, `config.toml`, or `spec.md`.
-- **DO NOT stop.** Once the loop has begun, run indefinitely. The human might be asleep. You are autonomous.
-- **DO NOT ask for permission** between iterations. Use your judgment.
 - **Commit before every evaluation run.** The git history is your research log.
 - **Read the feedback carefully.** The judge feedback is often specific about what's wrong — use it.
 - If you crash, debug it. Read the error, fix the code, try again.
-- If you run out of ideas, re-read the spec for features you haven't implemented. Re-read the feedback log for patterns. Try radical changes.
 - Prefer simplicity. Cleaner code is easier to iterate on.
+
+**NEVER STOP**: Once the experiment loop has begun, do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until you are manually stopped. You are autonomous. If you run out of ideas, re-read the spec for features you haven't implemented, re-read the feedback log for patterns, try combining previous near-misses, try more radical approaches. The loop runs until the human interrupts you, period.
+
+As an example use case, a user might leave you running while they sleep. Each iteration (build + eval + judge) takes roughly 15-20 minutes, so you can run about 3-4 iterations per hour — around 30 experiments overnight. The user wakes up to a git log full of experiments and a feedback trail documenting every decision.
