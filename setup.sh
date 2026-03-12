@@ -22,20 +22,24 @@ echo "Initializing verifiers submodule..."
 git submodule update --init --recursive
 
 echo ""
+echo "Creating virtual environment..."
+uv venv "$SCRIPT_DIR/.venv" --python 3.12
+
+echo ""
 echo "Installing verifiers from submodule..."
-cd "$SCRIPT_DIR/verifiers"
-uv pip install -e .
+uv pip install -e "$SCRIPT_DIR/verifiers" --python "$SCRIPT_DIR/.venv/bin/python"
 
 echo ""
 echo "Installing autoenv dependencies..."
-cd "$SCRIPT_DIR"
-uv pip install -e .
+uv pip install -e "$SCRIPT_DIR" --python "$SCRIPT_DIR/.venv/bin/python"
 
 echo ""
 echo "Installing candidate environment (stub)..."
-cd "$SCRIPT_DIR/candidate"
-uv pip install -e .
+uv pip install -e "$SCRIPT_DIR/candidate" --python "$SCRIPT_DIR/.venv/bin/python"
 
 echo ""
+echo "============================================="
 echo "Setup complete."
+echo "Venv: $SCRIPT_DIR/.venv"
 echo "Make sure PRIME_API_KEY is set in your environment."
+echo "============================================="

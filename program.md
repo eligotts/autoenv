@@ -16,6 +16,8 @@ You are an autonomous AI researcher. Your job is to build and iteratively improv
    - Your environment must be an installable Python package with a `load_environment(**kwargs) -> vf.Environment` function
    - See `./verifiers/` for the verifiers source (git submodule)
    - See `/Users/eligottlieb/Documents/research-environments/` for example environments
+   - **Important**: When using `StatefulToolEnv`, add tools via `self.add_tool(fn, args_to_skip=["state"])` in `__init__` after `super().__init__(tools=[], ...)`. Do NOT pass tools with hidden args directly to the constructor.
+   - **Important**: Use `setup_state()` to initialize per-rollout state from task info. Do NOT monkey-patch `get_prompt_messages`.
 
 3. Set up your working branch:
    - Agree on a run tag with the human based on today's date (e.g. `mar11`). The branch `autoenv/<tag>` must not already exist — this is a fresh run.
@@ -23,13 +25,18 @@ You are an autonomous AI researcher. Your job is to build and iteratively improv
    - All your work happens on this branch. Never push to master.
    - If `feedback_log.jsonl` exists, read it to understand prior iterations.
 
+4. Ensure the venv is ready:
+   - The project venv lives at `.venv/`. If it doesn't exist, run `bash setup.sh`.
+   - **ALWAYS use `.venv/bin/python` for local commands**, not `python` or `python3`.
+   - To reinstall the candidate after changes: `uv pip install -e ./candidate --python .venv/bin/python --quiet`
+
 ## The Candidate Environment
 
 Your environment lives in `candidate/`. The only hard contract:
 
 - `candidate/` must be installable via `uv pip install -e candidate/`
 - The package must export `load_environment(**kwargs) -> vf.Environment`
-- The environment must work with `vf-eval candidate-env`
+- The environment must work with `prime eval candidate-env`
 
 **Everything else is up to you.** You decide:
 - Which Environment subclass to use (ToolEnv, StatefulToolEnv, MultiTurnEnv, etc.)
@@ -48,16 +55,32 @@ LOOP:
   2. Read feedback_log.jsonl (if it exists) — understand what's been tried and what the feedback says
   3. Decide what to implement or improve
   4. Make your changes in candidate/
-  5. Test locally first: try importing the environment, generate a few tasks, sanity check
+  5. Test locally:
+       # Reinstall
+       uv pip install -e ./candidate --python .venv/bin/python --quiet
+       # Check it loads
+       .venv/bin/python -c "from candidate_env import load_environment; env = load_environment(num_tasks=3); print('OK:', type(env).__name__, len(env.dataset), 'tasks')"
+       # Test tools manually if applicable
+       .venv/bin/python -c "from candidate_env.data_gen import ...; # quick sanity checks"
   6. Commit your changes to git
   7. Run evaluation:
        bash evaluate.sh --description "brief description of changes"
-  8. Read the feedback entry (printed at end of evaluate.sh, also in feedback_log.jsonl)
+     This will:
+       a) Reinstall the candidate into the venv
+       b) Run a smoke test (1 task, 1 rollout, 1 model) — if this fails, it stops immediately
+       c) Run the full eval (all models, all tasks)
+       d) Run the feedback pipeline (stats + LLM judge)
+       e) Print the feedback entry
+  8. Read the feedback:
+       - **Numeric stats**: printed at end of evaluate.sh, also in `feedback_log.jsonl`
+       - **Judge feedback**: written to `feedback/<commit>.md` by an isolated Claude Code instance that reads the actual rollouts
   9. Reason about the feedback:
-       - What do the numeric stats say? (model performance spread, sweet spot score)
-       - What does the spec fidelity judge say? (are you implementing the spec correctly?)
-       - What does the reward faithfulness judge say? (does your scoring actually measure what the spec intends?)
+       - Check the **verdict** (`keep`/`discard`): a soft signal comparing this iteration to the previous one. Use it as a hint, not a command — a `discard` with good judge feedback may still be worth keeping.
+       - What do the numeric stats say? (mean reward, solve rate, RL readiness)
+       - What does the judge feedback say about spec fidelity? (are you implementing the spec correctly?)
+       - What does the judge feedback say about reward faithfulness? (does your scoring actually measure what the spec intends?)
   10. Decide next action:
+       - If verdict is `discard` and you agree the change was bad, consider `git revert HEAD` before continuing
        - Fix issues identified in feedback
        - Expand to cover more of the spec
        - Refine scoring/reward functions
@@ -71,8 +94,8 @@ LOOP:
 The feedback pipeline evaluates your environment on multiple axes. There is no single score to optimize — instead, read the feedback holistically:
 
 ### Numeric Signals
-- **Sweet spot score**: Are models at different capability levels getting meaningfully different scores? Ideal: weak models ~0.1-0.3, medium ~0.4-0.6, strong ~0.7-0.9. Bad: all models score the same, or all near 0, or all near 1.
-- **Per-model stats**: Mean/median/std of rewards, solve rates, error rates. Look for patterns.
+- **RL readiness**: The environment is evaluated against the target training model. For RL to work well, aim for mean reward 0.2-0.7 (enough signal to learn, room to improve), healthy reward variance (std > 0.1), and non-trivial solve rate (10-80%).
+- **Model stats**: Mean/median/std of rewards, solve rates, error rates. Look for patterns.
 - **Reward distribution**: Is there a spread of scores, or are they clustered at 0 and 1?
 
 ### Qualitative Signals
@@ -83,7 +106,7 @@ The feedback pipeline evaluates your environment on multiple axes. There is no s
 1. **First, make it work.** Get a basic environment that loads, runs, and produces rollouts without errors.
 2. **Then, match the spec.** Implement the core task structure, tools, and constraints the spec describes.
 3. **Then, fix the scoring.** Make sure rewards are faithful — high scores should mean genuinely good behavior.
-4. **Then, calibrate difficulty.** Tune task generation so the sweet spot metric looks good.
+4. **Then, calibrate difficulty.** Tune task generation so the target model's mean reward is in the 0.2-0.7 range.
 5. **Then, polish.** Edge cases, additional spec features, code quality, TUI visualizer, etc.
 
 ## Rules
@@ -96,4 +119,3 @@ The feedback pipeline evaluates your environment on multiple axes. There is no s
 - If you crash, debug it. Read the error, fix the code, try again.
 - If you run out of ideas, re-read the spec for features you haven't implemented. Re-read the feedback log for patterns. Try radical changes.
 - Prefer simplicity. Cleaner code is easier to iterate on.
-- Test locally before running the full evaluation — `python -c "from candidate_env import load_environment; env = load_environment(); print(env)"` is a fast sanity check.

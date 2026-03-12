@@ -5,9 +5,11 @@
 # This script is FIXED — the agent CANNOT modify it.
 #
 # What it does:
-#   1. Installs the candidate environment
-#   2. Runs prime eval against each model in the config
-#   3. Runs the feedback pipeline on collected rollouts
+#   1. Activates the project venv, reinstalls candidate
+#   2. Runs a smoke test (1 task, 1 rollout, 1 model) to catch obvious bugs
+#   3. Runs prime eval against each model in the config
+#   4. Computes numeric stats (feedback.py)
+#   5. Launches Claude Code as judge to analyze rollouts and write feedback
 #
 # Usage:
 #   bash evaluate.sh --description "brief description of changes"
@@ -19,11 +21,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="$SCRIPT_DIR/.venv"
 CONFIG_FILE="$SCRIPT_DIR/config.toml"
 SPEC_FILE="$SCRIPT_DIR/spec.md"
 CANDIDATE_DIR="$SCRIPT_DIR/candidate"
 FEEDBACK_LOG="$SCRIPT_DIR/feedback_log.jsonl"
+FEEDBACK_DIR="$SCRIPT_DIR/feedback"
 ENV_ID="candidate-env"
+PYTHON="$VENV_DIR/bin/python"
+
+# ---- Activate venv ----
+if [ ! -f "$PYTHON" ]; then
+    echo "ERROR: venv not found at $VENV_DIR. Run setup.sh first."
+    exit 1
+fi
+source "$VENV_DIR/bin/activate"
 
 # ---- Parse arguments ----
 DESCRIPTION=""
@@ -43,7 +55,7 @@ done
 
 # ---- Read config via Python (toml parsing) ----
 read_config() {
-    python3 -c "
+    "$PYTHON" -c "
 import tomllib, sys, json
 with open('$CONFIG_FILE', 'rb') as f:
     config = tomllib.load(f)
@@ -60,33 +72,62 @@ ENDPOINTS_PATH_RAW=$(read_config "print(config['eval']['vf']['endpoints_path'])"
 ENDPOINTS_PATH="$(cd "$SCRIPT_DIR" && realpath "$ENDPOINTS_PATH_RAW")"
 PROVIDER=$(read_config "print(config['eval']['vf']['provider'])")
 MAX_CONCURRENT=$(read_config "print(config['eval']['vf']['max_concurrent'])")
+# First model for smoke test
+FIRST_MODEL=$(echo "$MODELS" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin)[0])")
 
 echo "============================================="
 echo "AutoEnv Evaluation"
 echo "============================================="
+echo "Venv:        $VENV_DIR"
 echo "Examples:    $NUM_EXAMPLES"
 echo "Rollouts:    $ROLLOUTS_PER per example"
-echo "Models:      $(echo "$MODELS" | python3 -c "import sys,json; print(', '.join(json.load(sys.stdin)))")"
+echo "Models:      $(echo "$MODELS" | "$PYTHON" -c "import sys,json; print(', '.join(json.load(sys.stdin)))")"
 echo "Description: ${DESCRIPTION:-<none>}"
 echo "============================================="
 
-# ---- Step 1: Install candidate environment ----
+# ---- Step 0: Clean stale outputs from any interrupted prior run ----
+OUTPUTS_DIR="$SCRIPT_DIR/outputs"
+rm -rf "$OUTPUTS_DIR"
+
+# ---- Step 1: Reinstall candidate environment ----
 echo ""
-echo "[1/3] Installing candidate environment..."
-cd "$CANDIDATE_DIR"
-uv pip install -e . --quiet 2>&1 | tail -1
-cd "$SCRIPT_DIR"
+echo "[1/5] Installing candidate environment..."
+uv pip install -e "$CANDIDATE_DIR" --python "$PYTHON" --quiet 2>&1 | tail -1
 echo "      Done."
 
-# ---- Step 2: Run prime eval for each model ----
+# ---- Step 2: Smoke test (1 task, 1 rollout, 1 model) ----
 echo ""
-echo "[2/3] Running evaluations..."
+echo "[2/5] Smoke test (1 task, 1 rollout, $FIRST_MODEL)..."
 
-# Outputs go to $SCRIPT_DIR/outputs/
-OUTPUTS_DIR="$SCRIPT_DIR/outputs"
+SMOKE_SUCCESS=true
+if (cd "$SCRIPT_DIR" && prime eval "$ENV_ID" \
+    -m "$FIRST_MODEL" \
+    -e "$ENDPOINTS_PATH" \
+    -p "$PROVIDER" \
+    -n 1 \
+    -r 1 \
+    -c 1 \
+    -s \
+    -d) 2>&1 | tee "$SCRIPT_DIR/.smoke_test.log"; then
+    echo "      Smoke test passed."
+else
+    echo ""
+    echo "============================================="
+    echo "SMOKE TEST FAILED. Fix the environment before running the full eval."
+    echo "Check .smoke_test.log for details."
+    echo "============================================="
+    exit 1
+fi
+
+# Clean smoke test outputs
+rm -rf "$OUTPUTS_DIR"
+
+# ---- Step 3: Run prime eval for each model ----
+echo ""
+echo "[3/5] Running full evaluations..."
 
 EVAL_SUCCESS=true
-MODEL_LIST=$(echo "$MODELS" | python3 -c "import sys,json; [print(m) for m in json.load(sys.stdin)]")
+MODEL_LIST=$(echo "$MODELS" | "$PYTHON" -c "import sys,json; [print(m) for m in json.load(sys.stdin)]")
 
 while IFS= read -r MODEL; do
     echo ""
@@ -110,14 +151,13 @@ while IFS= read -r MODEL; do
     fi
 done <<< "$MODEL_LIST"
 
-# ---- Step 3: Run feedback pipeline ----
+# ---- Step 4: Compute numeric stats ----
 echo ""
-echo "[3/3] Generating feedback..."
+echo "[4/5] Computing numeric stats..."
 
 COMMIT=$(cd "$SCRIPT_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-python3 "$SCRIPT_DIR/feedback.py" \
-    --spec "$SPEC_FILE" \
+"$PYTHON" "$SCRIPT_DIR/feedback.py" \
     --config "$CONFIG_FILE" \
     --outputs-dir "$OUTPUTS_DIR" \
     --log-file "$FEEDBACK_LOG" \
@@ -125,21 +165,98 @@ python3 "$SCRIPT_DIR/feedback.py" \
     --description "$DESCRIPTION" \
     --eval-success "$EVAL_SUCCESS"
 
-# Clean up outputs after feedback is generated so each iteration starts fresh
-# (rollout data is captured in the feedback entry)
-rm -rf "$OUTPUTS_DIR"
-
+# Print numeric stats for the agent
 echo ""
-echo "============================================="
-echo "Evaluation complete. Feedback appended to:"
-echo "  $FEEDBACK_LOG"
-echo "============================================="
-
-# Print the latest feedback entry for the agent to read
-echo ""
-echo "=== LATEST FEEDBACK ==="
-tail -1 "$FEEDBACK_LOG" | python3 -c "
+echo "=== NUMERIC STATS ==="
+tail -1 "$FEEDBACK_LOG" | "$PYTHON" -c "
 import sys, json
 entry = json.loads(sys.stdin.read())
 print(json.dumps(entry, indent=2))
 "
+
+# ---- Step 5: Launch Claude Code judge for qualitative feedback ----
+echo ""
+echo "[5/5] Launching Claude Code judge..."
+
+mkdir -p "$FEEDBACK_DIR"
+FEEDBACK_FILE="$FEEDBACK_DIR/${COMMIT}.md"
+
+# Find the rollout results files
+ROLLOUT_PATHS=$(find "$OUTPUTS_DIR/evals" -name "results.jsonl" 2>/dev/null | tr '\n' ' ')
+
+if [ -z "$ROLLOUT_PATHS" ]; then
+    echo "  No rollout files found — skipping judge."
+    echo "# No rollouts available for judge review" > "$FEEDBACK_FILE"
+else
+    # Read numeric stats to include in judge prompt
+    STATS_SUMMARY=$(tail -1 "$FEEDBACK_LOG" | "$PYTHON" -c "
+import sys, json
+entry = json.loads(sys.stdin.read())
+rl = entry.get('rl_readiness', {})
+stats = list(entry.get('stats', {}).values())
+s = stats[0] if stats else {}
+print(f'''Numeric stats for this iteration:
+- Mean reward: {rl.get(\"mean_reward\", \"?\")}, Std: {rl.get(\"std_reward\", \"?\")}
+- Solve rate: {rl.get(\"solve_rate\", \"?\")}
+- Reward distribution: {json.dumps(s.get(\"reward_distribution\", {}))}
+- RL readiness: {rl.get(\"interpretation\", \"?\")}
+- Verdict vs previous: {entry.get(\"verdict\", {}).get(\"verdict\", \"?\")}: {entry.get(\"verdict\", {}).get(\"reason\", \"?\")}''')
+")
+
+    JUDGE_PROMPT="You are a feedback judge for an RL training environment. Your job is to analyze rollouts from a recent evaluation and provide detailed qualitative feedback.
+
+## Your Instructions
+
+1. Read the environment spec: $SPEC_FILE
+2. Read the rollout results files in $OUTPUTS_DIR/evals/ — there are results.jsonl files containing the actual rollouts. Each line is a JSON object with fields like 'completion' (the full message trajectory), 'reward', 'info' (task data), etc.
+3. ACTUALLY READ THE ROLLOUTS. Open the results.jsonl files and examine the completion field of multiple rollouts. Look at the tool calls, tool responses, agent reasoning, and final scores. Read at least 6-8 rollouts spanning low, medium, and high reward scores.
+4. Read the feedback log at $FEEDBACK_LOG to understand prior iterations.
+
+## Context
+
+Description of changes this iteration: ${DESCRIPTION:-none}
+$STATS_SUMMARY
+
+## What to Analyze
+
+### Spec Fidelity
+- Do the generated tasks match what the spec describes?
+- Does the agent have the tools the spec requires? Do they work correctly?
+- Are the constraint types from the spec represented in actual tasks?
+- What parts of the spec are NOT yet implemented or are incorrect?
+- Are there degenerate behaviors, exploits, or reward hacks visible?
+
+### Reward Faithfulness
+- Do high-scoring rollouts genuinely exhibit better behavior than low-scoring ones?
+- Is partial credit given appropriately?
+- Could a model achieve a high score WITHOUT doing what the spec intends?
+- Are zero scores deserved? Are high scores deserved?
+
+### RL Training Readiness
+- For RL to work well, the model needs mean reward in the 0.2-0.7 range.
+- Is the environment too hard? Too easy? What specific changes would bring the mean reward into the ideal range?
+
+## Output
+
+Write your complete feedback analysis to: $FEEDBACK_FILE
+
+Structure it as markdown with clear sections. Be specific — reference particular rollouts by their reward score and describe what happened. End with a prioritized list of issues to fix."
+
+    echo "  Writing feedback to: $FEEDBACK_FILE"
+    if env -u CLAUDECODE claude -p "$JUDGE_PROMPT" --print --dangerously-skip-permissions > "$FEEDBACK_FILE" 2>"$SCRIPT_DIR/.judge.log"; then
+        echo "  Judge feedback written successfully."
+    else
+        echo "  WARNING: Claude Code judge failed (exit code $?). Check .judge.log"
+        echo "# Judge failed — check .judge.log for details" > "$FEEDBACK_FILE"
+    fi
+fi
+
+# Clean up outputs after feedback is generated
+rm -rf "$OUTPUTS_DIR"
+
+echo ""
+echo "============================================="
+echo "Evaluation complete."
+echo "  Numeric stats: $FEEDBACK_LOG"
+echo "  Judge feedback: $FEEDBACK_FILE"
+echo "============================================="

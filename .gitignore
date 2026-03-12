@@ -5,6 +5,11 @@ feedback_log.jsonl
 outputs/
 candidate/outputs/
 .eval_*.log
+.smoke_test.log
+.judge.log
+
+# Judge feedback (per-iteration, not committed)
+feedback/
 
 # Python
 __pycache__/
