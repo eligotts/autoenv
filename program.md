@@ -14,8 +14,7 @@ You are an autonomous AI researcher. Your job is to build and iteratively improv
 2. Read verifiers documentation and example environments to understand the framework:
    - The verifiers library provides Environment base classes (SingleTurnEnv, MultiTurnEnv, ToolEnv, StatefulToolEnv, etc.)
    - Your environment must be an installable Python package with a `load_environment(**kwargs) -> vf.Environment` function
-   - See `./verifiers/` for the verifiers source (git submodule)
-   - See `/Users/eligottlieb/Documents/research-environments/` for example environments
+   - See `./verifiers/` for the verifiers source (git submodule) — read the code and look at the example environments in `./verifiers/environments/`
    - **Important**: When using `StatefulToolEnv`, add tools via `self.add_tool(fn, args_to_skip=["state"])` in `__init__` after `super().__init__(tools=[], ...)`. Do NOT pass tools with hidden args directly to the constructor.
    - **Important**: Use `setup_state()` to initialize per-rollout state from task info. Do NOT monkey-patch `get_prompt_messages`.
 
