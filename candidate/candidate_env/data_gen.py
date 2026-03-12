@@ -24,11 +24,12 @@ def generate_episode(seed: int) -> dict:
     """
     rng = random.Random(seed)
 
-    # Decide difficulty — 25/40/35 split balances coverage with challenge
+    # Decide difficulty — 20/40/40 split: enough easy for baseline learning,
+    # heavy medium for gradient signal, heavy hard for challenge
     roll = rng.random()
-    if roll < 0.25:
+    if roll < 0.20:
         difficulty = "easy"
-    elif roll < 0.65:
+    elif roll < 0.60:
         difficulty = "medium"
     else:
         difficulty = "hard"
