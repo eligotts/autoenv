@@ -107,7 +107,7 @@ def query_metrics(service: str, metric_name: str, time_range: str = "1h", state:
 
     Args:
         service: Service name
-        metric_name: One of: latency_p99, error_rate, cpu_usage, memory_usage, request_count, queue_depth, connections_active
+        metric_name: One of: latency_p99, error_rate, cpu_usage, memory_usage, request_count, queue_depth, connections_active, cache_miss_rate (cache services only), cache_hit_ratio (cache services only)
         time_range: Time range (e.g. '5m', '30m', '1h')
     """
     _tick(state, "query_metrics")
@@ -579,6 +579,15 @@ def _get_metric_value(svc, metric_name: str) -> float | None:
         "queue_depth": svc.queue_depth,
         "connections_active": svc.connections_active,
     }
+    # Cache-specific metrics
+    if svc.kind == "cache":
+        ttl = svc.config.get("ttl_seconds", 300)
+        if ttl <= 5:
+            mapping["cache_miss_rate"] = 0.98  # very high miss rate with low TTL
+            mapping["cache_hit_ratio"] = 0.02
+        else:
+            mapping["cache_miss_rate"] = 0.05
+            mapping["cache_hit_ratio"] = 0.95
     return mapping.get(metric_name)
 
 
