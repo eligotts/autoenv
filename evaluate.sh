@@ -236,6 +236,11 @@ $STATS_SUMMARY
 - For RL to work well, the model needs mean reward in the 0.2-0.7 range.
 - Is the environment too hard? Too easy? What specific changes would bring the mean reward into the ideal range?
 
+### Dataset Quality
+- The dataset should contain 1000 tasks. Check the environment code to verify the default dataset size.
+- Tasks should be meaningfully diverse — varied difficulty levels, constraint types, parameters, and scenarios. Flag if the tasks feel repetitive or are just slight parameter variations of the same template.
+- Are all difficulty levels and scenario categories from the spec represented in the sampled tasks?
+
 ## Output
 
 Write your complete feedback analysis to: $FEEDBACK_FILE
