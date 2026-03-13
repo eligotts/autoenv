@@ -36,6 +36,7 @@ Your environment lives in `candidate/`. The only hard contract:
 - `candidate/` must be installable via `uv pip install -e candidate/`
 - The package must export `load_environment(**kwargs) -> vf.Environment`
 - The environment must work with `prime eval candidate-env`
+- The dataset must contain **1000 tasks** by default. Tasks should be meaningfully diverse — varied difficulty, constraint types, parameters, and scenarios. Avoid generating 1000 near-identical tasks with slight parameter tweaks; each task should feel like a distinct challenge.
 
 **Everything else is up to you.** You decide:
 - Which Environment subclass to use (ToolEnv, StatefulToolEnv, MultiTurnEnv, etc.)

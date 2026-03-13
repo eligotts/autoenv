@@ -248,6 +248,11 @@ $STATS_SUMMARY
 - If the strong model scores low, the tasks may be too hard, poorly designed, or the scoring may be broken.
 - Compare strong model rollouts to target model rollouts: where does the strong model succeed that the target model fails? This reveals what the target model needs to learn.
 
+### Dataset Quality
+- The dataset should contain 1000 tasks. Check the environment code to verify the default dataset size.
+- Tasks should be meaningfully diverse — varied difficulty levels, constraint types, parameters, and scenarios. Flag if the tasks feel repetitive or are just slight parameter variations of the same template.
+- Are all difficulty levels and scenario categories from the spec represented in the sampled tasks?
+
 ## Output
 
 Write your complete feedback analysis to: $FEEDBACK_FILE
