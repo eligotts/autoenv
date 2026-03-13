@@ -1,8 +1,9 @@
 [project]
 name = "candidate-env"
 version = "0.1.0"
-description = "AutoEnv candidate environment — agent iterates on this"
+description = "On-call engineer RL environment — diagnose and remediate infrastructure incidents"
 requires-python = ">=3.11"
+tags = ["rl", "tool-use", "oncall", "incident-response"]
 dependencies = [
     "verifiers>=0.1.9",
     "datasets",

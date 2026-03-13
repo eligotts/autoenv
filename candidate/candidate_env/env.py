@@ -186,7 +186,7 @@ def _reconstruct_world(data: dict) -> World:
     return world
 
 
-def load_environment(num_tasks: int = 50, eval_num_tasks: int = 20, **kwargs) -> OnCallEngineerEnv:
+def load_environment(num_tasks: int = 1000, eval_num_tasks: int = 20, **kwargs) -> OnCallEngineerEnv:
     """Load the on-call engineer environment.
 
     Args:
