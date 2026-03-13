@@ -1,8 +1,9 @@
 [project]
 name = "candidate-env"
 version = "0.1.0"
-description = "AutoEnv candidate environment — agent iterates on this"
+description = "Your environment description here"
 requires-python = ">=3.11"
+tags = ["rl"]
 dependencies = [
     "verifiers>=0.1.9",
     "datasets",

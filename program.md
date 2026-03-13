@@ -38,6 +38,16 @@ Your environment lives in `candidate/`. The only hard contract:
 - The environment must work with `prime eval candidate-env`
 - The dataset must contain **1000 tasks** by default. Tasks should be meaningfully diverse — varied difficulty, constraint types, parameters, and scenarios. Avoid generating 1000 near-identical tasks with slight parameter tweaks; each task should feel like a distinct challenge.
 
+### Platform CI Requirements
+
+When you `prime env push`, the platform runs CI checks. Your `candidate/` package must satisfy these to pass:
+
+1. **`pyproject.toml` metadata**: Must include `name`, `version`, `description` (not the placeholder), and `tags` (a list of strings, e.g. `["rl", "tool-use", "your-domain"]`).
+2. **`README.md`**: Must exist in `candidate/`. A brief description of the environment is sufficient.
+3. **Importable**: `load_environment` must be importable and callable.
+
+These are already stubbed in the template — just fill them in early so pushes don't fail.
+
 **Everything else is up to you.** You decide:
 - Which Environment subclass to use (ToolEnv, StatefulToolEnv, MultiTurnEnv, etc.)
 - How to generate synthetic task data (inline, separate module, external dataset)
